@@ -1,5 +1,6 @@
 from typing import List, Dict
 
+import torch
 from torch.utils.data import Dataset
 
 from utils import Vocab
@@ -29,10 +30,34 @@ class SeqClsDataset(Dataset):
     @property
     def num_classes(self) -> int:
         return len(self.label_mapping)
-
+    
+    # __get_item__(idx) collects some data points and pack them into a list
+    # which was then sent into collate_fn
+    # Iterating the dataloader returns the result of collate_fn
+    #
+    # returns a dictionary batch, where
+    # batch['text'] = text data in integer ids, shape: (batch_size, max(seq_len))
+    # batch['intent'] = labels of each text data each in integer id, shape: (batch_size, )
+    # batch['seq_len'] = list of seq_len of each text data
     def collate_fn(self, samples: List[Dict]) -> Dict:
         # TODO: implement collate_fn
-        raise NotImplementedError
+        
+        batch = {}
+        samples.sort(key=lambda x: len(x['text'].split()), reverse=True)
+
+        # X = batch['text]
+        batch['text'] = [s['text'].split() for s in samples]
+
+        # in order to use nn.utils.rnn.pack_padded_sequence
+        batch['seq_len'] = [len(x) for x in batch['text']]
+
+        # convert 2d string to 2d integer ids
+        batch['text'] = self.vocab.encode_batch(batch['text'])
+
+        # Y = batch['intent']
+        batch['intent'] = [self.label2idx(s['intent']) for s in samples]
+
+        return batch
 
     def label2idx(self, label: str):
         return self.label_mapping[label]

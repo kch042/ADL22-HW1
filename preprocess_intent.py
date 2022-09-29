@@ -23,6 +23,7 @@ logging.basicConfig(
 def build_vocab(
     words: Counter, vocab_size: int, output_dir: Path, glove_path: Path
 ) -> None:
+    # save word (most common word)
     common_words = {w for w, _ in words.most_common(vocab_size)}
     vocab = Vocab(common_words)
     vocab_path = output_dir / "vocab.pkl"
@@ -30,6 +31,7 @@ def build_vocab(
         pickle.dump(vocab, f)
     logging.info(f"Vocab saved at {str(vocab_path.resolve())}")
 
+    # process glove file
     glove: Dict[str, List[float]] = {}
     logging.info(f"Loading glove: {str(glove_path.resolve())}")
     with open(glove_path) as fp:
@@ -58,6 +60,7 @@ def build_vocab(
     logging.info(
         f"Token covered: {num_matched} / {len(vocab.tokens)} = {num_matched / len(vocab.tokens)}"
     )
+    # 2d matrix, where each row vector represents a word embedding
     embeddings: List[List[float]] = [
         glove.get(token, [random() * 2 - 1 for _ in range(glove_dim)])
         for token in vocab.tokens
@@ -84,6 +87,7 @@ def main(args):
             [token for instance in dataset for token in instance["text"].split()]
         )
 
+    # save intent
     intent2idx = {tag: i for i, tag in enumerate(intents)}
     intent_tag_path = args.output_dir / "intent2idx.json"
     intent_tag_path.write_text(json.dumps(intent2idx, indent=2))

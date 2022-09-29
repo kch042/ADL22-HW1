@@ -30,6 +30,19 @@ class Vocab:
     def encode(self, tokens: List[str]) -> List[int]:
         return [self.token_to_id(token) for token in tokens]
 
+    # encode_batch
+    # e.g.
+    # batch_tokens = [
+    #   ['I', 'like', 'apple'],
+    #   ['Today', 'is', 'good'],
+    # ]
+    # ->
+    # [
+    #   [1, 29, 59],
+    #   [10, 25, 26],  
+    # ]
+    # The resulting 2d integer array is then fed into embedding layer
+    # which becomes a 3d tensor with shape (batch_size, seq_len, embed_dim)
     def encode_batch(
         self, batch_tokens: List[List[str]], to_len: int = None
     ) -> List[List[int]]:
@@ -39,6 +52,7 @@ class Vocab:
         return padded_ids
 
 
+# nn.utils.rnn.pad_sequence
 def pad_to_len(seqs: List[List[int]], to_len: int, padding: int) -> List[List[int]]:
     paddeds = [seq[:to_len] + [padding] * max(0, to_len - len(seq)) for seq in seqs]
     return paddeds
