@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Dict
 
 import torch
+from torch.utils.data import DataLoader
 from tqdm import trange
 
 from dataset import SeqClsDataset
+from model import SeqClassifier
 from utils import Vocab
 
 TRAIN = "train"
@@ -33,22 +35,98 @@ def main(args):
     # key = 'text', 'intent', 'id'
 
     # TODO: crecate DataLoader for train / dev datasets
+    dataloaders: Dict[str, DataLoader] = {
+        split: DataLoader(split_dataset, batch_size=args.batch_size,shuffle=True, collate_fn=split_dataset.collate_fn)
+        for split, split_dataset in datasets.items()
+    }
 
     embeddings = torch.load(args.cache_dir / "embeddings.pt")
     # TODO: init model and move model to target device(cpu / gpu)
-    model = None
+    model = SeqClassifier(
+        embeddings = embeddings,
+        hidden_size = args.hidden_size,
+        num_layers = args.num_layers,
+        bidirectional = args.bidirectional,
+        dropout = args.dropout,
+        num_class = len(intent2idx),
+    ).to(args.device)
 
     # TODO: init optimizer
-    optimizer = None
+    optimizer = torch.optim.Adam(model.parameters(), lr=args.lr)
+
+    acc_best = 0
 
     epoch_pbar = trange(args.num_epoch, desc="Epoch")
     for epoch in epoch_pbar:
         # TODO: Training loop - iterate over train dataloader and update model weights
+        loss_train, acc_train = train_per_epoch(dataloaders[TRAIN], model, optimizer)
+        print()
+        print(f'\ttrain_loss = {loss_train}, train_acc = {acc_train}')
+
         # TODO: Evaluation loop - calculate accuracy and save model weights
-        pass
+        loss_val, acc_val = validate_per_epoch(dataloaders[DEV], model)
+        if acc_val > acc_best:
+            acc_best = acc_val
+            save_ckpt(args.ckpt_dir, model, optimizer, epoch)
+        print(f'\tval_loss = {loss_val}, val_acc = {acc_val}')
 
-    # TODO: Inference on test set
 
+# return (training loss, accuracy)
+def train_per_epoch(dataloader, model, optimizer):
+    model.train()
+
+    loss_list = []
+    ok, overall = 0, 0
+    for batch in dataloader:
+        # forward pass
+        batch['text'] = torch.tensor(batch['text']).to(args.device)
+        batch['intent'] = torch.tensor(batch['intent']).to(args.device)
+        output_dict = model(batch)
+        loss = output_dict['loss']
+
+        # backward pass
+        optimizer.zero_grad()
+        loss.backward()
+        optimizer.step()
+
+        # store loss
+        loss_list.append(loss.detach())
+
+        # store classification result
+        ok += output_dict['ok']
+        overall += output_dict['overall']
+    
+    loss_list = torch.tensor(loss_list)
+    return loss_list.mean().item(), (ok / overall)  # (loss, accuracy)
+
+# return (val_loss, val_acc)
+@torch.no_grad()
+def validate_per_epoch(dataloader, model):
+    model.eval()
+
+    ok, overall = 0, 0
+    loss_list = []
+    for batch in dataloader:
+        batch['text'] = torch.tensor(batch['text']).to(args.device)
+        batch['intent'] = torch.tensor(batch['intent']).to(args.device)
+        output_dict = model(batch)
+
+        loss_list.append(output_dict['loss'])
+        ok += output_dict['ok']
+        overall += output_dict['overall']
+
+    loss_list = torch.tensor(loss_list)
+    return loss_list.mean().item(), ok / overall
+    
+
+def save_ckpt(ckpt_dir: Path, model, optimizer, epoch):
+    ckpt_path: str = ckpt_dir / 'model_intent.pt'
+    states = {
+      'model': model.state_dict(),
+      'optimizer': optimizer.state_dict(),
+      'epoch': epoch,
+    }
+    torch.save(states, ckpt_path)
 
 def parse_args() -> Namespace:
     parser = ArgumentParser()
@@ -77,7 +155,7 @@ def parse_args() -> Namespace:
     # model
     parser.add_argument("--hidden_size", type=int, default=512)
     parser.add_argument("--num_layers", type=int, default=2)
-    parser.add_argument("--dropout", type=float, default=0.1)
+    parser.add_argument("--dropout", type=float, default=0.2)
     parser.add_argument("--bidirectional", type=bool, default=True)
 
     # optimizer
@@ -88,7 +166,7 @@ def parse_args() -> Namespace:
 
     # training
     parser.add_argument(
-        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cpu"
+        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default='cuda' if torch.cuda.is_available() else 'cpu'
     )
     parser.add_argument("--num_epoch", type=int, default=100)
 

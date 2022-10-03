@@ -55,7 +55,13 @@ class SeqClsDataset(Dataset):
         batch['text'] = self.vocab.encode_batch(batch['text'])
 
         # Y = batch['intent']
-        batch['intent'] = [self.label2idx(s['intent']) for s in samples]
+        # test file does not have 'intent' field
+        if 'intent' in samples[0].keys():
+            batch['intent'] = [self.label2idx(s['intent']) for s in samples]
+        else:
+            batch['intent'] = None
+
+        batch['id'] = [s['id'] for s in samples]
 
         return batch
 

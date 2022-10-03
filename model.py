@@ -43,36 +43,48 @@ class SeqClassifier(torch.nn.Module):
 
         # We use cross entropy loss as our loss function
         # so we don't need a final SM layer
-        
+        self.loss_fn = nn.CrossEntropyLoss()
+
+        # if testing is set True, 
+        # then batch['intent'] is not provided
+        self.testing = False
+
     @property
     def encoder_output_size(self) -> int:
         # TODO: calculate the output dimension of rnn
         return self.hidden_size * (2 if self.bidirectional else 1)
     
-    # batch is the result of collate_fn in dataset.py 
     def forward(self, batch: Dict) -> Dict[str, torch.Tensor]:
-        # TODO: implement model forward
-
-        ## pack_padded_sequence
-        x = batch['text']
-
-        batch_size = len(x)
-        max_seq_len = len(x[0])
+        # batch is the result of collate_fn in dataset.py 
+        x = torch.tensor(batch['text'])
         
-        out = self.embed(x)
-        assert(out.shape == (batch_size, max_seq_len, self.embed_size), 
-          f'embed size error:\nwant: ({batch_size}, {max_seq_len}, {self.embed_size})\ngot: {out.shape}'
-        )
+        # Improve training efficiency with pack_padded_sequence
+        embed = self.embed(x)
+        packed_embed = nn.utils.rnn.pack_padded_sequence(embed, torch.tensor(batch['seq_len']), batch_first=True)
 
-        _, (h, _) = self.rnn(out)
+        _, (h, _) = self.rnn(packed_embed)
         if self.bidirectional:
             h = torch.cat((h[-1], h[-2]), 1) # [batch_size, 2*hidden_size]
         else:
             h = h[-1]  # [batch_size, hidden_size]
 
-        pred = self.classifier(h)
-        assert(pred.shape == (batch_size, self.num_class), f'pred size error:\nwant: ({batch_size}, {self.num_class})\ngot: {pred.shape}')
-        
+        out = self.classifier(h) # [batch_size, num_class]
+
+        # Classify each text to the intent with max probability
+        pred = out.max(dim=1)[1]
+
+        res = { 
+          'out': out,    # shape: (batch_size, num_class)
+          'pred': pred,  # Classfication result, shape: (batch_size)
+        }
+
+        if not self.testing:
+            y = torch.tensor(batch['intent']).long()
+            res['ok'] = (pred == y).sum().item()
+            res['overall'] = len(x)
+            res['loss'] = self.loss_fn(out, y)
+
+        return res
         
         
 
