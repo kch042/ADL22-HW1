@@ -19,7 +19,7 @@ def main(args):
         vocab: Vocab = pickle.load(f)
     tag2idx = json.loads((args.cache_dir / 'tag2idx.json').read_text())
 
-    data = json.loads((args.data_dir / 'test.json').read_text())
+    data = json.loads(args.test_file.read_text())
     dataset = SeqTaggingClsDataset(
         data = data,
         vocab = vocab,
@@ -38,7 +38,7 @@ def main(args):
       num_class = len(tag2idx),
     ).to(args.device)
     
-    ckpt = torch.load(args.ckpt_dir / 'model_slot.pt')
+    ckpt = torch.load(args.ckpt_path)
     model.load_state_dict(ckpt['model'])
     
     model.eval()
@@ -60,15 +60,13 @@ def main(args):
                 
 
 
-
-
 def parse_args() -> Namespace:
     parser = ArgumentParser()
     parser.add_argument(
-        "--data_dir",
+        "--test_file",
         type=Path,
-        help="Directory to the dataset.",
-        default="./data/slot/",
+        help="Path to the test file.",
+        default="./data/slot/test.json",
     )
     parser.add_argument(
         "--cache_dir",
@@ -77,10 +75,10 @@ def parse_args() -> Namespace:
         default="./cache/slot/",
     )
     parser.add_argument(
-        "--ckpt_dir",
+        "--ckpt_path",
         type=Path,
         help="Directory to save the model file.",
-        default="./ckpt/slot/",
+        default="./ckpt/slot/model_slot.pt",
     )
     parser.add_argument("--pred_file", type=Path, default="pred.slot.csv")
 

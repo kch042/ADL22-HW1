@@ -154,7 +154,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--bidirectional", type=bool, default=True)
 
     # optimizer
-    parser.add_argument("--lr", type=float, default=1e-3)
+    parser.add_argument("--lr", type=float, default=1e-4)
 
     # data loader
     parser.add_argument("--batch_size", type=int, default=128)
