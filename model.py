@@ -3,6 +3,8 @@ from typing import Dict
 import torch
 import torch.nn as nn
 
+import os
+
 class SeqClassifier(torch.nn.Module):
     def __init__(
         self,
@@ -33,9 +35,9 @@ class SeqClassifier(torch.nn.Module):
           num_layers = num_layers,
           bidirectional = bidirectional,
           batch_first = True,  # size = [batch_size, seq_len, embed_dim]
-          )
+        )
 
-        # 3. Linear layer
+        # 3. FC layer
         self.classifier = nn.Sequential(
           nn.Dropout(dropout),
           nn.Linear(self.encoder_output_size, num_class),
@@ -55,6 +57,8 @@ class SeqClassifier(torch.nn.Module):
         return self.hidden_size * (2 if self.bidirectional else 1)
     
     def forward(self, batch: Dict) -> Dict[str, torch.Tensor]:
+        self.rnn.flatten_parameters()
+        
         # batch is the result of collate_fn in dataset.py 
         x = torch.tensor(batch['text'])
         
@@ -86,15 +90,48 @@ class SeqClassifier(torch.nn.Module):
 
         return res
         
-        
-
-
-
-
-
 
 
 class SeqTagger(SeqClassifier):
     def forward(self, batch) -> Dict[str, torch.Tensor]:
+        self.rnn.flatten_parameters()
+        
         # TODO: implement model forward
-        raise NotImplementedError
+        x = torch.tensor(batch['tokens'])
+        batch['seq_len'] = torch.tensor(batch['seq_len'])
+
+        # Embedding
+        embed = self.embed(x) # (batch_size, max_len, embed_dim)
+        #packed_embed = nn.utils.rnn.pack_padded_sequence(embed, batch['seq_len'], batch_first=True)
+
+        # LSTM
+        #out, (_, _) = self.rnn(packed_embed)
+        #out, _ = nn.utils.rnn.pad_packed_sequence(out, batch_first=True) # TODO: (batch_size, max_len, encoder_output_size)
+
+        out, (_, _) = self.rnn(embed)
+
+        out = self.classifier(out) # (batch_size, max_len, num_class)
+        pred = out.max(dim=2)[1]   # (batch_size, max_len)
+
+        # debug
+        # y = batch['tags']
+        # print('after classified, out.shape: ', out.shape)
+        # print('pred.shape: ',pred.shape)
+        # print('y.shape: ', y.shape)
+
+        res = {
+          'out': out,
+          'pred': pred,
+        }
+
+        if not self.testing:
+            y = torch.tensor(batch['tags']).long()
+            res['correct'] = (y == pred).all(dim=1).sum().item()
+
+            # input: (batch_size, num_class, seq_len)
+            # target: (batch_size, num_class)
+            res['loss'] = self.loss_fn(out.permute(0, 2, 1), y)
+        
+        return res
+        
+        

@@ -3,7 +3,7 @@ from typing import List, Dict
 import torch
 from torch.utils.data import Dataset
 
-from utils import Vocab
+from utils import Vocab, pad_to_len
 
 
 class SeqClsDataset(Dataset):
@@ -75,6 +75,25 @@ class SeqClsDataset(Dataset):
 class SeqTaggingClsDataset(SeqClsDataset):
     ignore_idx = -100
 
-    def collate_fn(self, samples):
+    def collate_fn(self, samples: List[Dict]):
         # TODO: implement collate_fn
-        raise NotImplementedError
+        samples.sort(key=lambda x: len(x['tokens']), reverse=True)
+        
+        batch = {}
+
+        # X
+        batch['tokens'] = [s['tokens'] for s in samples]
+        batch['seq_len'] = [len(s['tokens']) for s in samples]
+
+        # convert 2d strings to 2d int ids, also pad each row to self.max_len
+        batch['tokens'] = self.vocab.encode_batch(batch['tokens'], self.max_len)
+        
+
+        batch['id'] = [s['id'] for s in samples]
+
+        # Y
+        if 'tags' in samples[0].keys():
+            batch['tags'] = [[self.label2idx(t) for t in s['tags']] for s in samples]
+            batch['tags'] = pad_to_len(batch['tags'], self.max_len, 0)
+
+        return batch
