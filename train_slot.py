@@ -2,7 +2,7 @@ import json
 import pickle
 from argparse import ArgumentParser, Namespace
 from pathlib import Path
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List
 
 import torch
 from torch.optim import Adam
@@ -13,52 +13,66 @@ from dataset import SeqTaggingClsDataset
 from model import SeqTagger
 from utils import Vocab
 
+from seqeval.scheme import IOB2
+from seqeval.metrics import classification_report
+from seqeval.metrics import precision_score, accuracy_score
+
 TRAIN = "train"
 DEV = "eval"
 SPLITS = [TRAIN, DEV]
 
-def train_per_epoch(dataloader, model, optimizer) -> Tuple[float, int]:
+# evaluate the accuracy
+def evaluate(y_pred: List[List[str]], y_true: List[List[str]]):
+    print(classification_report(y_true, y_pred, mode='strict', scheme=IOB2))
+    return accuracy_score(y_true, y_pred), precision_score(y_true, y_pred)
+
+def train_per_epoch(dataloader, model, optimizer, clip):
     model.train()
 
     loss_list = []
-    correct = 0
 
+    y_pred, y_true = [], []
     for batch in dataloader:
         # forward pass
         batch['tokens'] = torch.tensor(batch['tokens']).to(args.device)
+        batch['mask'] = batch['tokens'].gt(0).bool()
         batch['tags'] = torch.tensor(batch['tags']).to(args.device)
         output_dict = model(batch)
         
-        # store result
-        loss = output_dict['loss']
-        loss_list.append(loss.detach())
-        correct += output_dict['correct']
-
         # backward pass
+        loss = output_dict['loss']
         optimizer.zero_grad()
         loss.backward()
+
+        torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
         optimizer.step()
 
-    loss_mean = torch.tensor(loss_list).mean().item()
-    return loss_mean, correct
+        loss_list.append(loss.detach())
+
+        # store the result
+        for yp, yl, yt in zip(output_dict['pred'], batch['seq_len'], batch['tags']):
+            y_pred.append(yp[:yl].detach().tolist())
+            y_true.append(yt[:yl].detach().tolist())
+
+    return y_pred, y_true
 
 @torch.no_grad()
-def validate_per_epoch(dataloader, model) -> Tuple[float, int]:
+def validate_per_epoch(dataloader, model):
     model.eval()
 
-    loss_list = []
-    correct = 0
+    y_pred = []
+    y_true = []
     for batch in dataloader:
         batch['tokens'] = torch.tensor(batch['tokens']).to(args.device)
+        batch['mask'] = batch['tokens'].gt(0).bool()
         batch['tags'] = torch.tensor(batch['tags']).to(args.device)
         output_dict = model(batch)
 
-        loss = output_dict['loss']
-        loss_list.append(loss)
-        correct += output_dict['correct']      
+        for yp, yl, yt in zip(output_dict['pred'], batch['seq_len'], batch['tags']):
+            y_pred.append(yp[:yl].detach().tolist())
+            y_true.append(yt[:yl].detach().tolist())
 
-    loss_mean = torch.tensor(loss_list).mean().item()
-    return loss_mean, correct
+    return y_pred, y_true
 
 def main(args):
     # Data 
@@ -86,31 +100,37 @@ def main(args):
         num_layers = args.num_layers,
         dropout = args.dropout,
         bidirectional = args.bidirectional,
-        num_class = len(tag2idx)
+        num_class = len(tag2idx),
+        use_crf = args.use_crf,
     ).to(args.device)
 
     optimizer = Adam(model.parameters(), lr = args.lr)
 
     # Training
-    acc_best = 0.0
+    prec_best = 0.0
     epoch_bar = trange(args.num_epoch, desc='Epoch')
     for epoch in epoch_bar:
-        # Training set
-        loss_train, correct_train = train_per_epoch(dataloaders[TRAIN], model, optimizer)
-        acc_train = correct_train / data_sizes[TRAIN]
-
         print()
-        print(f'\ttrain_loss = {loss_train}, train_acc = {acc_train}')
+        
+        # Training set
+        pred, true = train_per_epoch(dataloaders[TRAIN], model, optimizer, args.clip)
 
         # Validation set
-        loss_val, correct_val = validate_per_epoch(dataloaders[DEV], model)
-        acc_val = correct_val / data_sizes[DEV]
+        pred, true = validate_per_epoch(dataloaders[DEV], model)
+        #pred, true = train_per_epoch(dataloaders[DEV], model, optimizer, args.clip)
 
-        print(f'\tval_loss = {loss_val}, val_acc = {acc_val}')
+        pred = [[datasets[DEV].idx2label(element) for element in p] for p in pred]  
+        true = [[datasets[DEV].idx2label(element) for element in t] for t in true]
+        acc, prec = evaluate(pred, true)
+        print(f"Validation acc and prec: ({acc}, {prec})")
+
+        # ok = sum([p == t for p, t in zip(pred, true)])
+        # prec = ok / len(pred)
+        # print(prec)
 
         # Save the best model
-        if acc_val > acc_best:
-            acc_val = acc_best
+        if prec >  prec_best:
+            prec_best = prec
             save_ckpt(args.ckpt_dir, model, optimizer, epoch)
 
 def save_ckpt(ckpt_dir: Path, model, optimizer, epoch):
@@ -152,9 +172,11 @@ def parse_args() -> Namespace:
     parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.3)
     parser.add_argument("--bidirectional", type=bool, default=True)
+    parser.add_argument('--use_crf', type=bool, default=False)
 
     # optimizer
-    parser.add_argument("--lr", type=float, default=1e-4)
+    parser.add_argument("--clip", type=float, default=5.)
+    parser.add_argument("--lr", type=float, default=5e-4)
 
     # data loader
     parser.add_argument("--batch_size", type=int, default=128)

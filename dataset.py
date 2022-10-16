@@ -87,12 +87,11 @@ class SeqTaggingClsDataset(SeqClsDataset):
 
         # convert 2d strings to 2d int ids, also pad each row to self.max_len
         batch['tokens'] = self.vocab.encode_batch(batch['tokens'], self.max_len)
-        
-
         batch['id'] = [s['id'] for s in samples]
 
         # Y
         if 'tags' in samples[0].keys():
+            batch['raw_tags'] = [s['tags'] for s in samples]
             batch['tags'] = [[self.label2idx(t) for t in s['tags']] for s in samples]
             batch['tags'] = pad_to_len(batch['tags'], self.max_len, 0)
 

@@ -168,7 +168,7 @@ def parse_args() -> Namespace:
     parser.add_argument(
         "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default='cuda' if torch.cuda.is_available() else 'cpu'
     )
-    parser.add_argument("--num_epoch", type=int, default=70)
+    parser.add_argument("--num_epoch", type=int, default=50)
 
     args = parser.parse_args()
     return args

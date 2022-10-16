@@ -36,6 +36,7 @@ def main(args):
       dropout = args.dropout, 
       bidirectional = args.bidirectional,
       num_class = len(tag2idx),
+      use_crf = args.use_crf,
     ).to(args.device)
     
     ckpt = torch.load(args.ckpt_path)
@@ -49,6 +50,7 @@ def main(args):
         
         for batch in dataloader:
             batch['tokens'] = torch.tensor(batch['tokens']).to(args.device)
+            batch['mask'] = batch['tokens'].gt(0).bool()
             output_dict = model(batch)
 
             for i, length, tags in zip(batch['id'], batch['seq_len'], output_dict['pred']):
@@ -90,6 +92,7 @@ def parse_args() -> Namespace:
     parser.add_argument("--num_layers", type=int, default=2)
     parser.add_argument("--dropout", type=float, default=0.1)
     parser.add_argument("--bidirectional", type=bool, default=True)
+    parser.add_argument('--use_crf', type=bool, default=False)
 
     # data loader
     parser.add_argument("--batch_size", type=int, default=128)
