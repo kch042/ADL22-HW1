@@ -1,4 +1,4 @@
-# Training
+# Intent Classification/Slot Tagging
 
 ## Environment
 Google Colab
