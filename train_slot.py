@@ -183,7 +183,7 @@ def parse_args() -> Namespace:
 
     # training
     parser.add_argument(
-        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cuda"
+        "--device", type=torch.device, help="cpu, cuda, cuda:0, cuda:1", default="cuda" if torch.cuda.is_available() else 'cpu'
     )
     parser.add_argument("--num_epoch", type=int, default=50)
 

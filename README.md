@@ -23,7 +23,7 @@ To update python version to 3.9, run
 
 ## Training
 ### Intent Classification
-`!python train_intent.py --data_dir <data_dir> --cache_dir <cache_dir> --ckpt_dir <ckpt_dir> --hidden_size <hidden_size> --num_layers <num_layers> --dropout <dropout> --bidirectional <bidirectional> --lr <lr> --batch_size <batch_size> --num_epoch <num_epoch> --device <device>`
+`!python train_intent.py --data_dir <data_dir> --cache_dir <cache_dir> --ckpt_dir <ckpt_dir> --hidden_size <hidden_size> --num_layers <num_layers> --dropout <dropout> --bidirectional <bidirectional> --lr <lr> --batch_size <batch_size> --num_epoch <num_epoch>`
 
 - data_dir: Directory to the train.json and eval.json file.
 - cache_dir: Directory to the preprocessed caches.
@@ -35,11 +35,10 @@ To update python version to 3.9, run
 - lr: learning rate. [default: 1e-3]
 - batch_size: size of data in each mini batch. [default: 128]
 - num_epoch: number of epochs for training. [default: 50]
-- device: train the model on cpu or cuda [default: cuda]
 
 
 ### Slot Tagging
-`!python train_slot.py --data_dir <data_dir> --ckpt_dir <ckpt_dir> --hidden_size <hidden_size> --num_layers <num_layers> --dropout <dropout> --bidirectional <bidirectional> --lr <lr> --batch_size <batch_size> --num_epoch <num_epoch> --device <device> --use_crf <use_crf> --clip <clip>`
+`!python train_slot.py --data_dir <data_dir> --ckpt_dir <ckpt_dir> --hidden_size <hidden_size> --num_layers <num_layers> --dropout <dropout> --bidirectional <bidirectional> --lr <lr> --batch_size <batch_size> --num_epoch <num_epoch> --use_crf <use_crf> --clip <clip>`
 
 - data_dir: Directory to the train.json and eval.json file.
 - ckpt_dir: Directory to save the model file.
@@ -56,17 +55,15 @@ To update python version to 3.9, run
 
 ## Prediction
 ### Intent Classification
-`!python test_intent.py --test_file <test_file> --ckpt_path <ckpt_path> --pred_file <pred_file> --device <device>`
+`!python test_intent.py --test_file <test_file> --ckpt_path <ckpt_path> --pred_file <pred_file>`
 
 - test_file: Path to the test json file.
 - ckpt_path: Path to model checkpoint file.
 - pred_file: Path to save the prediction file.
-- device: use cpu or cuda to train the device.
 
 ### Slot Tagging
-`!python test_slot.py --test_file <test_file> --ckpt_path <ckpt_path> --pred_file <pred_file> --device <device>`
+`!python test_slot.py --test_file <test_file> --ckpt_path <ckpt_path> --pred_file <pred_file>
 
 - test_file: Path to the test json file.
 - ckpt_path: Path to model checkpoint file.
 - pred_file: Path to save the prediction file.
-- device: use cpu or cuda to train the device.
